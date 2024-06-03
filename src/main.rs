@@ -1,8 +1,13 @@
+#![feature(addr_parse_ascii)]
+
+use std::net::SocketAddrV4;
+
 use anyhow::Context;
 use clap::Parser;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use bittorrent_starter_rust::{
-    Args, Commands, decode_bencoded, Torrent, TrackerRequest, TrackerResponse, urlencode,
+    Args, Commands, decode_bencoded, Handshake, Torrent, TrackerRequest, TrackerResponse, urlencode,
 };
 
 // Usage: your_bittorrent.sh decode "<encoded_value>"
@@ -67,6 +72,35 @@ async fn main() -> anyhow::Result<()> {
             for peer in response.peers.0 {
                 println!("{}:{}", peer.ip(), peer.port());
             }
+        }
+        Commands::Handshake { torrent, peer } => {
+            let f = std::fs::read(torrent).context("read torrent file")?;
+            let t: Torrent = serde_bencode::from_bytes(&f).context("parse torrent file")?;
+
+            let info_hash = t.info_hash();
+
+            let peer = peer.parse::<SocketAddrV4>().context("parse peer addr")?;
+            let mut peer = tokio::net::TcpStream::connect(peer)
+                .await
+                .context("connect to peer")?;
+            let mut handshake = Handshake::new(info_hash, *b"00112233445566778899");
+            {
+                let handshake_bytes =
+                    &mut handshake as *mut Handshake as *mut [u8; std::mem::size_of::<Handshake>()];
+                // Safety: Handshake is a POD(Plain of Data) with repr(C)
+                // which means any byte pattern is valid
+                let handshake_bytes: &mut [u8; std::mem::size_of::<Handshake>()] =
+                    unsafe { &mut *handshake_bytes };
+                peer.write_all(handshake_bytes)
+                    .await
+                    .context("write handshake")?;
+                peer.read_exact(handshake_bytes)
+                    .await
+                    .context("read handshake")?;
+            }
+            assert_eq!(handshake.length, 19);
+            assert_eq!(&handshake.bittorrent, b"BitTorrent protocol");
+            println!("Peer ID: {}", hex::encode(&handshake.peer_id));
         }
     }
 
