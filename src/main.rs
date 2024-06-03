@@ -2,6 +2,7 @@ use anyhow::Context;
 use clap::Parser;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sha1::{Digest, Sha1};
 
 use bittorrent_starter_rust::{Args, Commands, Hashes};
 
@@ -187,22 +188,13 @@ fn main() -> anyhow::Result<()> {
             } else {
                 todo!()
             }
+            let info_encoded =
+                serde_bencode::to_bytes(&t.info).context("re-encode info section")?;
+            let mut hasher = Sha1::new();
+            hasher.update(&info_encoded);
+            let info_hash = hasher.finalize();
+            println!("Info Hash: {}", hex::encode(info_hash));
         }
     }
     Ok(())
-
-    // let args: Vec<String> = env::args().collect();
-    // let command = &args[1];
-    //
-    // if command == "decode" {
-    //     // You can use print statements as follows for debugging, they'll be visible when running tests.
-    //     eprintln!("Logs from your program will appear here!");
-    //
-    //     // Uncomment this block to pass the first stage
-    //     let encoded_value = &args[2];
-    //     let decoded_value = decode_bencoded_value(encoded_value);
-    //     println!("{}", decoded_value.0);
-    // } else {
-    //     println!("unknown command: {}", args[1])
-    // }
 }
