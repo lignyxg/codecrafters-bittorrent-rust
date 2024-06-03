@@ -181,7 +181,7 @@ fn main() -> anyhow::Result<()> {
         Commands::Info { torrent } => {
             let f = std::fs::read(torrent).context("read torrent file")?;
             let t: Torrent = serde_bencode::from_bytes(&f).context("parse torrent file")?;
-            eprintln!("{t:?}");
+            // eprintln!("{t:?}");
             println!("Tracker URL: {}", t.announce);
             if let Keys::SingleFile { length } = t.info.keys {
                 println!("Length: {}", length);
@@ -194,6 +194,11 @@ fn main() -> anyhow::Result<()> {
             hasher.update(&info_encoded);
             let info_hash = hasher.finalize();
             println!("Info Hash: {}", hex::encode(info_hash));
+            println!("Piece Length: {}", t.info.plength);
+            println!("Piece Hashes:");
+            for hash in t.info.pieces.0 {
+                println!("{}", hex::encode(hash));
+            }
         }
     }
     Ok(())
